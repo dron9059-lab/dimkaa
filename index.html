@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Оқу тапсырмаларын басқаруға арналған офлайн PWA қолданбасы">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon-192.png">
+  <title>StudyTask — оқу тапсырмалары</title>
+  <style>
+    :root { color-scheme: light; --blue:#2563eb; --ink:#172033; --muted:#64748b; --line:#e2e8f0; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, sans-serif; background:#f1f5f9; color:var(--ink); }
+    .wrap { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:22px; }
+    h1 { margin:0; font-size:28px; }
+    .sub { color:var(--muted); margin:7px 0 0; }
+    button, input { font:inherit; }
+    button { border:0; border-radius:10px; padding:11px 14px; cursor:pointer; }
+    .lang { background:#dbeafe; color:#1d4ed8; font-weight:bold; }
+    .panel { background:white; border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 4px 18px #0f172a0a; }
+    form { display:flex; gap:9px; margin:18px 0 14px; }
+    input { min-width:0; flex:1; padding:13px; border:1px solid #cbd5e1; border-radius:10px; outline-color:var(--blue); }
+    .add { background:var(--blue); color:white; font-weight:bold; }
+    .stats { color:var(--muted); font-size:14px; margin:12px 0 16px; }
+    ul { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+    li { display:flex; align-items:center; gap:10px; padding:12px; border:1px solid var(--line); border-radius:12px; }
+    li .task { flex:1; overflow-wrap:anywhere; }
+    li.done .task { text-decoration:line-through; color:#94a3b8; }
+    .check { width:20px; height:20px; accent-color:var(--blue); }
+    .remove { background:#fee2e2; color:#b91c1c; padding:8px 11px; }
+    .empty { text-align:center; color:var(--muted); padding:24px 8px; }
+    footer { color:var(--muted); font-size:12px; text-align:center; margin-top:18px; }
+    @media(max-width:480px) { h1{font-size:23px} form{flex-wrap:wrap} form input{flex-basis:100%} .add{width:100%} }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div>
+        <h1>📚 StudyTask</h1>
+        <p class="sub" id="subtitle">Оқу тапсырмаларын басқару</p>
+      </div>
+      <button class="lang" id="langBtn" type="button">Русский</button>
+    </header>
+    <section class="panel">
+      <h2 id="formTitle">Жаңа тапсырма</h2>
+      <form id="taskForm">
+        <input id="taskInput" type="text" maxlength="120" autocomplete="off"
+               placeholder="Мысалы: Python зертханалық жұмысын орындау" required>
+        <button class="add" id="addBtn" type="submit">Қосу</button>
+      </form>
+      <div class="stats" id="stats" aria-live="polite"></div>
+      <ul id="taskList"></ul>
+      <div class="empty" id="emptyState">Әзірге тапсырма жоқ. Бірінші тапсырманы қосыңыз.</div>
+    </section>
+    <footer id="footerText">Деректер осы браузерде сақталады. Серверге жіберілмейді.</footer>
+  </main>
+<script>
+(() => {
+  const STORAGE_KEY = "studytask-items-v1";
+  let language = "kk";
+  let tasks = [];
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    tasks = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(tasks)) tasks = [];
+  } catch (error) {
+    tasks = [];
+  }
+
+  const words = {
+    kk: {
+      subtitle:"Оқу тапсырмаларын басқару", form:"Жаңа тапсырма", placeholder:"Мысалы: Python зертханалық жұмысын орындау",
+      add:"Қосу", empty:"Әзірге тапсырма жоқ. Бірінші тапсырманы қосыңыз.", total:"Барлығы",
+      completed:"Орындалды", pending:"Қалғаны", remove:"Жою", footer:"Деректер осы браузерде сақталады. Серверге жіберілмейді.",
+      invalid:"Тапсырма мәтінін енгізіңіз.", lang:"Русский"
+    },
+    ru: {
+      subtitle:"Управление учебными заданиями", form:"Новое задание", placeholder:"Например: выполнить лабораторную работу по Python",
+      add:"Добавить", empty:"Пока заданий нет. Добавьте первое задание.", total:"Всего",
+      completed:"Выполнено", pending:"Осталось", remove:"Удалить", footer:"Данные хранятся в этом браузере и не отправляются на сервер.",
+      invalid:"Введите текст задания.", lang:"Қазақша"
+    }
+  };
+
+  const $ = id => document.getElementById(id);
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+    catch (error) { alert(language === "kk" ? "Сақтау мүмкін болмады." : "Не удалось сохранить данные."); }
+  }
+  function render() {
+    const w = words[language];
+    $("subtitle").textContent = w.subtitle;
+    $("formTitle").textContent = w.form;
+    $("taskInput").placeholder = w.placeholder;
+    $("addBtn").textContent = w.add;
+    $("emptyState").textContent = w.empty;
+    $("footerText").textContent = w.footer;
+    $("langBtn").textContent = w.lang;
+    $("stats").textContent = `${w.total}: ${tasks.length} · ${w.completed}: ${tasks.filter(t => t.done).length} · ${w.pending}: ${tasks.filter(t => !t.done).length}`;
+    const list = $("taskList");
+    list.replaceChildren();
+    $("emptyState").hidden = tasks.length > 0;
+
+    tasks.forEach(task => {
+      const li = document.createElement("li");
+      if (task.done) li.classList.add("done");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "check";
+      checkbox.checked = Boolean(task.done);
+      checkbox.setAttribute("aria-label", language === "kk" ? "Орындалды деп белгілеу" : "Отметить выполнение");
+      checkbox.addEventListener("change", () => {
+        task.done = checkbox.checked;
+        save(); render();
+      });
+      const span = document.createElement("span");
+      span.className = "task";
+      span.textContent = task.text;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "remove";
+      remove.textContent = w.remove;
+      remove.addEventListener("click", () => {
+        tasks = tasks.filter(item => item.id !== task.id);
+        save(); render();
+      });
+      li.append(checkbox, span, remove);
+      list.append(li);
+    });
+  }
+
+  $("taskForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const value = $("taskInput").value.trim();
+    if (!value) {
+      alert(words[language].invalid);
+      $("taskInput").focus();
+      return;
+    }
+    tasks.unshift({ id: Date.now().toString() + Math.random().toString(16).slice(2), text:value, done:false });
+    save();
+    $("taskInput").value = "";
+    render();
+  });
+  $("langBtn").addEventListener("click", () => {
+    language = language === "kk" ? "ru" : "kk";
+    render();
+  });
+
+  render();
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(error => {
+        console.error("Service worker тіркелмеді:", error);
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>
